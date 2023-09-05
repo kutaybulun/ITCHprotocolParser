@@ -25,7 +25,6 @@ always @* begin
         sessionIDNext = 80'h0;
         sequenceNumberNext = 64'h0;
         messageCountNext = 16'h0;
-        messageLenghtNext = 16'h0;
     end else begin
         case (counter)
             5: begin

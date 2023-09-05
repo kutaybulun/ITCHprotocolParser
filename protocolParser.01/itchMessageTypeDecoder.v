@@ -1,4 +1,4 @@
-module itchMessageTypeDecoder (
+module itchMessageTypeDecoder ( //IMPORTANT 
     input clk, rst,
     input [63:0] dataIn,
     input [1:0] counter,
@@ -24,7 +24,7 @@ always @(posedge clk) begin
     startOrderExecutedWithPrice <= startOrderExecutedWithPriceNext;
     startOrderDelete <= startOrderDeleteNext;
     messageType <= messageTypeNext;
-    messageLength <= messageCountNext;
+    messageLength <= messageLenghtNext;
 end
 
 always @* begin
@@ -40,7 +40,7 @@ always @* begin
     end else begin
         if (counter == 8) begin
             // Extract the first 16 bits as message length
-            reg [15:0] messageLength = dataIn[15:0];
+            messageLenghtNext = dataIn[15:0];
 
             // Extract the message type (1 byte) following message length
             messageTypeNext = dataIn[23:16];

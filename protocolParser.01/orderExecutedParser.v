@@ -2,6 +2,7 @@ module orderExecutedParser (
     input clk, rst,
     input [63:0] dataIn,
     input [1:0] counter,
+    input [5:0] trackerIn,
     input startOrderExecuted,
     output reg [31:0] timeStamp,
     output reg [63:0] orderID,
@@ -62,45 +63,7 @@ always @* begin
         reservedOneNext = 32'h0;
         reservedTwoNext = 32'h0;
     end else begin
-        case (state)
-            0: begin
-                if (startOrderExecuted && counter == 8) begin
-                    timeStampNext = dataIn[55:24];
-                    orderIDNext[7:0] = dataIn[63:56];
-                    stateNext = 1;
-                end
-            end
-            1: begin
-                case (counter)
-                    9: begin
-                        orderIDNext[63:8] = dataIn[55:0];
-                        orderBookIDNext[7:0] = dataIn[63:56];
-                    end
-                    10: begin
-                        orderBookIDNext[31:8] = dataIn[23:0];
-                        sideNext = dataIn[31:24];
-                        executedQuantityNext[31:0] = dataIn[63:32];
-                    end
-                    11: begin
-                        executedQuantityNext[63:32] = dataIn[31:0];
-                        matchIDNext[31:0] = dataIn[62:32];
-                    end
-                    12: begin
-                        matchIDNext[63:32] = dataIn[31:0];
-                        comboGroupIDNext = dataIn[63:32];
-                    end
-                    13: begin
-                        reservedOneNext = dataIn[55:0];
-                        reservedTwoNext[7:0] = dataIn[63:56];
-                    end
-                    14: begin
-                        reservedTwoNext[63:8] = dataIn[55:0];
-                    end
-                    default:
-                endcase
-                stateNext = state;
-            end
-        endcase
+        
     end
 end
 
