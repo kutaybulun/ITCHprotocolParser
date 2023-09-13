@@ -7,8 +7,9 @@ class tb_sequence_item item extends uvm_sequence_item;
 //--------------------------------------------------------
 //Instantiation
 //--------------------------------------------------------
-logic rst;
-logic [63:0] rx_data_net;
+rand logic rst;
+rand logic [63:0] rx_data_net;
+//outputs
 logic [6:0] counterOut;
 logic [47:0] dMac_out;
 logic [47:0] sMac_out;
@@ -37,7 +38,8 @@ logic [15:0] messageCount_out;
 //--------------------------------------------------------
 //Default Constraints
 //--------------------------------------------------------
-
+constraint rx_data_net_constraint {rx_data_net inside {[0:0xffffffffffffffff]}; }
+constraint rst_constraint {rst inside {0,1};}
 //--------------------------------------------------------
 //Constructor
 //--------------------------------------------------------

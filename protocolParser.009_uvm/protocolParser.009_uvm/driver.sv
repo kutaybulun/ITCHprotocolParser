@@ -3,6 +3,7 @@ class tb_driver extends uvm_driver#(tb_sequence_item);
 `uvm_component_utils(tb_driver)
 virtual tb_interface vif;
 tb_sequence_item item;
+int cycle_count;
 
 //--------------------------------------------------------
 //Constructor
@@ -38,12 +39,25 @@ task run_phase (uvm_phase phase);
     super.run_phase(phase);
     `uvm_info("DRIVER_CLASS", "Run Phase!", UVM_HIGH)
     //LOGIC
-    forever begin
-        item = tb_sequence_item::type_id::create("item");
-        seq_item_port.get_next_item(item);
-        drive(item);
-        seq_item_port.item_done();
+   // forever begin
+        //item = tb_sequence_item::type_id::create("item");
+        //seq_item_port.get_next_item(item);
+        //drive(item);
+        //seq_item_port.item_done();
+    //end
+    cycle_count = 0;
+    while (cycle_count < 8) begin
+        item = tb_sequence_item::type_id::create($sformatf("item_%0d", cycle_count));
+        if (!seq_item_port.get_next_item(item)) begin
+            `uvm_fatal("GET_NEXT_ITEM", "Failed to get the next item from the sequencer")
+            break;
+            drive(item);
+            seq_item_port.item_done();
+            cycle_count ++;
+            @(posedge vif.clk);
+        end
     end
+    
 endtask: run_phase
 
 //--------------------------------------------------------
@@ -53,7 +67,6 @@ task drive(tb_sequence_item item);
     @(posedge vif.clk);
         vif.rst <= item.rst;
         vif.rx_data_net <= item.rx_data_net;
-    //continue for the interface, driving to dut interface!
 endtask: drive
 
 endclass //tb_driver extends uvm_test

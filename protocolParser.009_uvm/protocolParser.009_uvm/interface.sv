@@ -1,5 +1,4 @@
-interface tb_interface;
-logic clk;
+interface tb_interface(input logic clk);
 logic rst;
 logic [63:0] rx_data_net;
 logic [6:0] counterOut;

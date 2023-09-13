@@ -1,4 +1,4 @@
-class tb_sequencer extends uvm_sequencer;
+class tb_sequencer extends uvm_sequencer#(tb_sequence_item);
 
 `uvm_component_utils(tb_sequencer)
 

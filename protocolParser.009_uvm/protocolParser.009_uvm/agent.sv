@@ -40,7 +40,6 @@ endfunction: connect_phase
 task run_phase (uvm_phase phase);
     super.run_phase(phase);
     `uvm_info("AGENT_CLASS", "Run Phase!", UVM_HIGH)
-    //LOGIC
 endtask: run_phase
 
 endclass //tb_agent extends uvm_test

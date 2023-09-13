@@ -41,9 +41,12 @@ task run_phase (uvm_phase phase);
         //SEQUENCES
         reset_sequence = tb_base_sequence::type_id:create("reset_sequence");
         reset_sequence.start(env.agent.sequencer);
-
-        test_sequence = tb_test_sequence::type_id::create("test_sequence");
-        test_sequence.start(env.agent.sequencer);
+        #10;
+        repeat(10) begin
+            test_sequence = tb_test_sequence::type_id::create("test_sequence");
+            test_sequence.start(env.agent.sequencer);
+            #10;
+        end
     phase.drop_objection(this);
 
 endtask: run_phase

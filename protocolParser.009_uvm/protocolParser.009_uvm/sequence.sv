@@ -41,10 +41,16 @@ endfunction
 //--------------------------------------------------------
 task body();
     `uvm_info("TEST_SEQ", "Inside body task!", UVM_HIGH)
-    test_pkt = tb_sequence_item::type_id::create("test_pkt");
+    //test_pkt = tb_sequence_item::type_id::create("test_pkt");
+    //start_item(test_pkt);
+        //test_pkt.randomize() with {reset==0;};
+    //finish_item(test_pkt);
+    for (int i = 0; i < 8; i++ ) begin
+        test_pkt = tb_sequence_item::type_id::create($sformatf("data_pkt_%0d", i));
     start_item(test_pkt);
         test_pkt.randomize() with {reset==0;};
-    finish_item(test_pkt);
+    finish_item(test_pkt);    
+    end
 endtask: body
 
 endclass: tb_test_sequence

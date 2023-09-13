@@ -1,6 +1,8 @@
 class tb_env extends uvm_env;
 
 `uvm_component_utils(tb_env)
+tb_agent agent;
+tb_scoreboard scoreboard;
 
 //--------------------------------------------------------
 //Constructor
@@ -16,7 +18,8 @@ endfunction: new
 function void build_phase(uvm_phase phase);
     super.build_phase(phase);
     `uvm_info("ENV_CLASS", "Build Phase!", UVM_HIGH)
-    env = alu_env::type_id::create("env", this);
+    agent = tb_agent::type_id::create("agent", this);
+    scoreboard = tb_scoreboard::type_id::create("scoreboard", this);
 endfunction: build_phase
 
 //--------------------------------------------------------
@@ -25,6 +28,7 @@ endfunction: build_phase
 function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
     `uvm_info("ENV_CLASS", "Connect Phase!", UVM_HIGH)
+    agent.monitor.monitor_port.connect(scoreboard.scoreboard_port);
 endfunction: connect_phase
 
 //--------------------------------------------------------
@@ -33,7 +37,6 @@ endfunction: connect_phase
 task run_phase (uvm_phase phase);
     super.run_phase(phase);
     `uvm_info("ENV_CLASS", "Run Phase!", UVM_HIGH)
-    //LOGIC
 endtask: run_phase
 
 endclass //tb_env extends uvm_test
