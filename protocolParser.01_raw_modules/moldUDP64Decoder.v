@@ -28,10 +28,10 @@ always @* begin
     end else begin
         case (counter)
             5: begin
-                sessionIDNext[31:0] = dataIn[63:32]
+                sessionIDNext[31:0] = dataIn[63:32];
             end
             6: begin
-                sessionIDNext[79:32] = dataIn[47:0]
+                sessionIDNext[79:32] = dataIn[47:0];
                 sequenceNumberNext[15:0] = dataIn[63:48];
             end
             7: begin

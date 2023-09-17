@@ -3,6 +3,7 @@ module orderBookDirectoryParser (
     input [63:0] dataIn,
     input startOrderBookDirectory,
     input [5:0] trackerIn,
+    output reg signal_end,
     output reg [5:0] trackerOut,
     output reg [31:0] timeStamp,
     output reg [31:0] orderBookID,
@@ -24,7 +25,7 @@ module orderBookDirectoryParser (
     output reg [7:0] putOrCall
 );
 // transition registers
-reg counter, counterNext;
+reg [4:0] counter, counterNext;
 reg [5:0] tracker, trackerNext;
 // field registers
 reg [31:0] timeStampNext;
@@ -120,6 +121,7 @@ always @* begin
     // transition registers
     trackerNext = tracker;
     counterNext = counter;
+    signal_end = 0;
     // field registers
     timeStampNext = timeStamp;
     orderBookIDNext = orderBookID;
@@ -170,6 +172,7 @@ always @* begin
         // transition registers
         trackerNext = trackerIn;
         counterNext = 0;
+        signal_end = 0;
         // field registers
         timeStampNext = 32'h0;
         orderBookIDNext = 32'h0;
@@ -233,18 +236,23 @@ always @* begin
                 end
             end
             1: begin
-                if(orderBookIDValid) begin
-                    symbolNext[63:0] = dataIn;
-                    symbolValid1Next = 1;
+                if(startOrderBookDirectory) begin
+                    if(orderBookIDValid) begin
+                        symbolNext[63:0] = dataIn;
+                        symbolValid1Next = 1;
+                    end
+                    else begin
+                        {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
+                        timeStampValidNext = 1;
+                        orderBookIDValidNext = 1;
+                        symbolNext[63:0] = dataIn >> tracker;
+                        trackerNext = tracker + 64;
+                    end
+                    counterNext = counter + 1;
                 end
                 else begin
-                    {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
-                    timeStampValidNext = 1;
-                    orderBookIDValidNext = 1;
-                    symbolNext[63:0] = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    counterNext = 0;
                 end
-                counterNext = counter + 1;
             end 
             2: begin
                 if(symbolValid1) begin
@@ -425,7 +433,8 @@ always @* begin
                     expirationDateNext[23:0] = dataIn[63:40];
                     //SIGNAL TO END.
                     //TRACKER OUT = 31
-                    assign trackerOut = 31;
+                    trackerOut = 31;
+                    signal_end = 1;
                 end
                 else begin
                     nominalValueNext = nominalValue + (dataIn << (64-1-tracker));
@@ -435,7 +444,8 @@ always @* begin
                     if(64 - tracker >= 32) begin
                         //SIGNAL TO END.
                         //TRACKER OUT = tracker + 64 + 32
-                        assign trackerOut = tracker + 32; 
+                        trackerOut = tracker + 32; 
+                        signal_end = 1;
                     end
                 end
                 counterNext = counter + 1;
@@ -466,13 +476,14 @@ always @* begin
                         //SIGNAL TO END.
                         //TRACKER OUT = tracker + 32;
                         trackerNext = tracker + 64;
-                        assign trackerOut = tracker + 64;
+                        trackerOut = tracker + 32;
                         counterNext = counter + 1;
+                        signal_end = 1;
                     end
                 end
             end
             16: begin
-                {putOrCallNext, numberOfDecimalsInStrikePriceNext, expirationDateNext[31:24]} = {putOrCall, numberOfDecimalsInStrikePrice, expirationDate[31:24]} + (dataIn << (64-1-tracker));
+                {putOrCallNext, numberOfDecimalsInStrikePriceNext, expirationDateNext[31:24]} = {putOrCall, numberOfDecimalsInStrikePrice, expirationDate[31:24]} + (dataIn << (32-1-tracker));
                 expirationDateValidNext = 1;
                 numberOfDecimalsInStrikePriceValidNext = 1;
                 putOrCallValidNext = 1;

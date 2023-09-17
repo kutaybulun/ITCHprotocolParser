@@ -3,6 +3,7 @@ module orderBookStateParser ( // always signal to end one clock cycle before act
     input [63:0] dataIn,
     input startOrderBookState,
     input [5:0] trackerIn,
+    output reg signal_end,
     output reg [5:0] trackerOut,
     output reg [31:0] timeStamp,
     output reg [31:0] orderBookID,
@@ -42,6 +43,7 @@ always @* begin
     // transition registers
     trackerNext = tracker;
     counterNext = counter;
+    signal_end = 0;
     // field registers
     timeStampNext = timeStamp;
     orderBookIDNext = orderBookID;
@@ -57,6 +59,7 @@ always @* begin
         // transition registers
         trackerNext = trackerIn;
         counterNext = 0;
+        signal_end = 0;
         // field registers
         timeStampNext = 32'h0;
         orderBookIDNext = 64'h0;
@@ -82,25 +85,31 @@ always @* begin
                 counterNext = counter + 1; 
             end
             1: begin
-                if(orderBookIDValid) begin
-                    stateNameNext[63:0] = dataIn;
-                    stateNameValid1Next = 1;
+                if(startOrderBookState) begin
+                    if(orderBookIDValid) begin
+                        stateNameNext[63:0] = dataIn;
+                        stateNameValid1Next = 1;
+                    end
+                    else begin
+                        {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
+                        timeStampValidNext = 1;
+                        orderBookIDValidNext = 1;
+                        stateNameNext[63:0] = dataIn >> tracker;
+                        trackerNext = tracker + 64;
+                    end
+                    counterNext = counter + 1;
                 end
                 else begin
-                    {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
-                    timeStampValidNext = 1;
-                    orderBookIDValidNext = 1;
-                    stateNameNext[63:0] = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    counterNext = 0;
                 end
-                counterNext = counter + 1;
             end
             2: begin
                 if(stateNameValid1) begin
                     stateNameNext[127:64] = dataIn;
                     stateNameValid2Next = 1;
                     //SIGNAL TO END.
-                    assign trackerOut = 32;
+                    trackerOut = 32;
+                    signal_end = 1;
                 end
                 else begin
                     stateNameNext[63:0] = stateName[63:0] + (dataIn << (64-1-tracker));
@@ -108,7 +117,8 @@ always @* begin
                     stateNameNext[127:64] = dataIn >> tracker;
                     if(64 - tracker >= 32) begin
                         //SIGNAL TO END.
-                        assign trackerOut = tracker + 32; 
+                        trackerOut = tracker + 32;
+                        signal_end = 1; 
                     end
                 end
                 counterNext = counter + 1;
@@ -132,7 +142,8 @@ always @* begin
                         trackerNext = tracker + 32;
                         counterNext = counter + 1;
                         //SIGNAL TO END.
-                        assign trackerOut = tracker + 32;
+                        signal_end = 1;
+                        trackerOut = tracker + 32;
                     end
                 end
             end

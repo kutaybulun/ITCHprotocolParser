@@ -1,8 +1,9 @@
-module orderExecutedWithPriceParser ( // add control signals within and for the next module after. counter, trackerOut etc. 
+module orderExecutedWithPriceParser ( // always signal to end one clock cycle before actual END. also assign trackerOut one cycle before actual END.
     input clk, rst,
     input [63:0] dataIn,
     input startOrderExecutedWithPrice,
     input [5:0] trackerIn,
+    output reg signal_end,
     output reg [5:0] trackerOut,
     output reg [31:0] timeStamp,
     output reg [63:0] orderID,
@@ -17,10 +18,10 @@ module orderExecutedWithPriceParser ( // add control signals within and for the 
     output reg [7:0] occuredAtCross,
     output reg [7:0] printable
 );
-
-reg counter, counterNext;
+// transition registers
+reg [2:0] counter, counterNext;
 reg [5:0] tracker, trackerNext;
-
+// field registers
 reg [31:0] timeStampNext;
 reg [63:0] orderIDNext;
 reg [31:0] orderBookIDNext;
@@ -33,7 +34,7 @@ reg [31:0] reservedTwoNext;
 reg [31:0] tradePriceNext;
 reg [7:0] occuredAtCrossNext;
 reg [7:0] printableNext;
-
+// valid registers
 reg timeStampValid, timeStampValidNext;
 reg orderIDValid, orderIDValidNext;
 reg orderBookIDValid, orderBookIDValidNext;
@@ -48,9 +49,10 @@ reg occuredAtCrossValid, occuredAtCrossValidNext;
 reg printableValid, printableValidNext;
 
 always @(posedge clk) begin
-    state <= stateNext;
+    // transition registers
     tracker <= trackerNext;
     counter <= counterNext;
+    // field registers
     timeStamp <= timeStampNext;
     orderID <= orderIDNext;
     orderBookID <= orderBookIDNext;
@@ -63,7 +65,7 @@ always @(posedge clk) begin
     tradePrice <= tradePriceNext;
     occuredAtCross <= occuredAtCrossNext;
     printable <= printableNext;
-
+    // valid registers
     timeStampValid <= timeStampValidNext;
     orderIDValid <= orderIDValidNext;
     orderBookIDValid <= orderBookIDValidNext;
@@ -79,8 +81,11 @@ always @(posedge clk) begin
 end
 
 always @* begin
+    // transition registers
     trackerNext = tracker;
     counterNext = counter;
+    signal_end = 0;
+    // field registers
     timeStampNext = timeStamp;
     orderIDNext = orderID;
     orderBookIDNext = orderBookID;
@@ -93,7 +98,7 @@ always @* begin
     tradePriceNext = tradePrice;
     occuredAtCrossNext = occuredAtCross;
     printableNext = printable;
-    trackerOutValidNext = trackerOutValid;
+    // valid registers
     timeStampValidNext = timeStampValid;
     orderIDValidNext = orderIDValid;
     orderBookIDValidNext = orderBookIDValid;
@@ -108,8 +113,11 @@ always @* begin
     printableValidNext = printableValid;
 
     if (rst) begin
+        // transition registers
         counterNext = 0;
         trackerNext = trackerIn;
+        signal_end = 0;
+        // field registers
         timeStampNext = 32'h0;
         orderIDNext = 64'h0;
         orderBookIDNext = 32'h0;
@@ -122,7 +130,7 @@ always @* begin
         tradePriceNext = 32'h0;
         occuredAtCrossNext = 8'h0;
         printableNext = 8'h0;
-
+        // valid registers
         timeStampValidNext = 0;
         orderIDValidNext = 0;
         orderBookIDValidNext = 0;
@@ -137,165 +145,130 @@ always @* begin
         printableValidNext = 0;
     end else begin
         case (counter)
-            0: begin
+            0:begin
+                if (trackerIn == 0) begin
+                    {orderIDNext[31:0], timeStampNext} = dataIn;
+                    timeStampValidNext = 1;
+                    trackerNext = trackerIn;
+                end
+                else begin
+                    {orderIDNext[31:0], timeStampNext} = dataIn >> trackerIn;
+                    trackerNext = trackerIn;
+                end
+                counterNext = counter + 1;
+            end
+            1: begin
                 if(startOrderExecutedWithPrice) begin
-                    if(64 - trackerIn >= 32) begin
-                        timeStampNext = dataIn >> trackerIn;
-                        timeStampValidNext = 1; //A valid
-                        orderIDNext = dataIn >> (trackerIn + 32);
-                        trackerNext = trackerIn + 32 + 64;
+                    if (timeStampValid) begin
+                        {orderBookIDNext, orderIDNext[63:32]} = dataIn;
+                        orderIDValidNext = 1;
+                        orderBookIDValidNext = 1;
                     end
                     else begin
-                        timeStampNext = dataIn >> trackerIn;
-                        trackerNext = trackerIn + 32;
+                        {orderIDNext[31:0], timeStampNext} = {orderID[31:0], timeStamp} + (dataIn << (64-1-tracker));
+                        timeStampValidNext = 1;
+                        {orderBookIDNext, orderIDNext[63:32]} = dataIn >> tracker;
                     end
                     counterNext = counter + 1;
                 end
-            end
-            1: begin
-                if (timeStampValid) begin
-                    orderIDNext = orderID + (dataIn << (64-1-tracker));
-                    orderIDValidNext = 1; //B valid
-                    if(64 - tracker >= 32) begin
-                        orderBookIDNext = dataIn >> tracker;
-                        orderBookIDValidNext = 1; //C valid
-                        trackerNext = tracker + 32;
-                    end
-                    else begin
-                        orderBookIDNext = dataIn >> tracker;
-                        trackerNext = tracker + 32;
-                    end
-                end
                 else begin
-                    timeStampNext = timeStamp + (dataIn << (32-1-tracker));
-                    timeStampValidNext = 1; //A valid
-                    orderIDNext = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    counterNext = 0;
                 end
             end
             2: begin
-                if(orderIDValid) begin
-                    if(orderBookIDValid) begin
-                        sideNext = dataIn >> tracker;
-                        sideValidNext = 1; //D valid
-                        executedQuantityNext = dataIn >> (tracker + 8);
-                        trackerNext = tracker + 8 + 64;
-                    end
-                    else begin
-                        orderBookIDNext = (dataIn << (32-1-tracker));
-                        orderBookIDValidNext = 1; //C valid
-                        sideNext = dataIn >> tracker;
-                        sideValidNext = 1; // D valid
-                        executedQuantityNext = dataIn >> (tracker + 8);
-                        trackerNext = tracker + 8 + 64;
-                    end
+                if(orderBookIDValid) begin
+                    {executedQuantityNext[55:0], sideNext} = dataIn;
+                    sideValidNext = 1;
                 end
                 else begin
-                    orderIDNext = orderID + (dataIn << (64-1-tracker));
-                    orderIDValidNext = 1; //B valid
-                    orderBookIDNext = dataIn >> tracker;
-                    orderBookIDValidNext = 1; //C valid
-                    if(64 - tracker - 32 >= 8) begin
-                        sideNext = dataIn >> (tracker + 32);
-                        sideValidNext = 1; //D valid
-                        executedQuantityNext = dataIn >> (tracker + 8 + 32);
-                        trackerNext = tracker + 32 + 8 + 64;
-                    end
-                    else begin
-                        sideNext = dataIn >> (tracker + 32);
-                        trackerNext = tracker + 32 + 8;
-                    end
+                    {orderBookIDNext, orderIDNext[63:32]} = {orderBookID, orderID[63:32]} + (dataIn << (64-1-tracker));
+                    orderIDValidNext = 1;
+                    orderBookIDValidNext = 1;
+                    {executedQuantityNext[55:0], sideNext} = dataIn >> tracker;
                 end
                 counterNext = counter + 1;
             end
             3: begin
-                if(sideValid) begin
-                    executedQuantityNext = executedQuantity + (dataIn << (64-1-tracker));
-                    executedQuantityValidNext = 1; //E valid
-                    matchIDNext = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                if (sideValid) begin
+                    {matchIDNext[55:0], executedQuantityNext[63:56]} = dataIn;
+                    executedQuantityValidNext = 1;
                 end
                 else begin
-                    sideNext = side + (dataIn << (8-1-tracker));
-                    sideValidNext = 1; // D valid
-                    executedQuantityNext = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    {executedQuantityNext[55:0], sideNext} = {executedQuantity[55:0], side} + (dataIn << (64-1-tracker));
+                    sideValidNext = 1;
+                    {matchIDNext[55:0], executedQuantityNext[63:56]} = dataIn >> tracker;
                 end
                 counterNext = counter + 1;
-            end 
+            end
             4: begin
-                if (executedQuantityValid) begin
-                    matchIDNext = matchID + (dataIn << (64-1-tracker));
-                    matchIDValidNext = 1; //F valid
-                    {reservedOneNext, comboGroupIDNext} = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                if(executedQuantityValid) begin
+                    {reservedOneNext[23:0], comboGroupIDNext, matchIDNext[63:56]} = dataIn;
+                    matchIDValidNext = 1;
+                    comboGroupIDValidNext = 1;
                 end
                 else begin
-                    executedQuantityNext = executedQuantity + (dataIn << (64-1-tracker));
-                    executedQuantityValidNext = 1; //E valid
-                    matchIDNext = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    {matchIDNext[55:0], executedQuantityNext[63:56]} = {matchID[55:0], executedQuantity[63:56]} + (dataIn << (64-1-tracker));
+                    executedQuantityValidNext = 1;
+                    {reservedOneNext[23:0], comboGroupIDNext, matchIDNext[63:56]} = dataIn >> tracker;
                 end
                 counterNext = counter + 1;
             end
             5: begin
-                if(matchIDValid) begin
-                    {reservedOneNext, comboGroupIDNext} = {reservedOne, comboGroupID} + (dataIn << (64-1-tracker));
-                    reservedOneValidNext = 1; //H valid
-                    comboGroupIDValidNext = 1; //G valid
-                    {tradePriceNext, reservedTwoNext} = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                if (comboGroupIDValid) begin
+                    {tradePriceNext[23:0], reservedTwoNext, reservedOneNext[31:24]} = dataIn;
+                    reservedOneValidNext = 1;
+                    reservedTwoValidNext = 1;
+                    //SIGNAL TO END.
+                    signal_end = 1;
+                    trackerOut = 24;
                 end
                 else begin
-                    matchIDNext = matchID + (dataIn << (64-1-tracker));
-                    matchIDValidNext = 1; //F valid
-                    {reservedOneNext, comboGroupIDNext} = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    {reservedOneNext[23:0], comboGroupIDNext, matchIDNext[63:56]} = {reservedOne[23:0], comboGroupID, matchID[63:56]} + (dataIn << (64-1-tracker));
+                    matchIDValidNext = 1;
+                    comboGroupIDValidNext = 1;
+                    {tradePriceNext[23:0], reservedTwoNext, reservedOneNext[31:24]} = dataIn >> tracker;
+                    if (64 - tracker >= 24) begin
+                        //SIGNAL TO END.
+                        signal_end = 1;
+                        trackerOut = tracker + 24;                
+                    end
                 end
                 counterNext = counter + 1;
             end
             6: begin
-                if(reservedOneValid) begin
-                    {tradePriceNext, reservedTwoNext} = {tradePrice, reservedTwo} + (dataIn << (64-1-tracker));
-                    reservedTwoValidNext = 1; //I valid
-                    tradePriceValidNext = 1; //J valid
-                    if(64 - t >= 16) begin
-                        {printableNext, occuredAtCrossNext} = dataIn >> tracker;
-                        occuredAtCrossValidNext = 1; // K valid
-                        printableValidNext = 1; //L valid
-                        trackerNext = tracker + 16; //END.
+                if (reservedTwoValid) begin
+                    {printableNext, occuredAtCrossNext, tradePriceNext[31:24]} = dataIn;
+                    tradePriceValidNext = 1;
+                    occuredAtCrossValidNext = 1;
+                    printableValidNext = 1;
+                    counterNext = 0; //GO TO INITIAL STATE.
+                end
+                else begin
+                    {tradePriceNext[23:0], reservedTwoNext, reservedOneNext[31:24]} = {tradePrice[23:0], reservedTwo, reservedOne[31:24]} + (dataIn << (64-1-tracker));
+                    reservedOneValidNext = 1;
+                    reservedTwoValidNext = 1;
+                    {printableNext, occuredAtCrossNext, tradePriceNext[31:24]} = dataIn >> tracker;
+                    if (64 - tracker >= 24) begin
+                        tradePriceValidNext = 1;
+                        occuredAtCrossValidNext = 1;
+                        printableValidNext = 1;
+                        counterNext = 0; //GO TO INITIAL STATE.
                     end
                     else begin
-                        {printableNext, occuredAtCrossNext} = dataIn >> tracker;
-                        trackerNext = tracker + 16;
+                        trackerNext = tracker + 24;
+                        counterNext = counter + 1;
+                        //SIGNAL TO END.
+                        signal_end = 1;
+                        trackerOut = tracker + 24;
                     end
                 end
-                else begin
-                    {reservedOneNext, comboGroupIDNext} = {reservedOne, comboGroupID} + (dataIn << (64-1-tracker));
-                    reservedOneValidNext = 1; //H valid
-                    comboGroupIDValidNext = 1; //G valid
-                    {tradePriceNext, reservedTwoNext} = dataIn >> tracker;
-                    trackerNext = tracker + 64;
-                end
-                counterNext = counter + 1;
             end
             7: begin
-                if(tradePriceValid) begin
-                    {printableNext, occuredAtCrossNext} = {printable, occuredAtCross} + (dataIn << (16-1-tracker));
-                    occuredAtCrossValidNext = 1; // K valid
-                    printableValidNext = 1; //L valid
-                    trackerNext = tracker + 16; //END.
-                end
-                else begin
-                    {tradePriceNext, reservedTwoNext} = {tradePrice, reservedTwo} + (dataIn << (64-1-tracker));
-                    reservedTwoValidNext = 1; //I valid
-                    tradePriceValidNext = 1; //J valid
-                    {printableNext, occuredAtCrossNext} = dataIn >> tracker;
-                    occuredAtCrossValidNext = 1; // K valid
-                    printableValidNext = 1; //L valid
-                    trackerNext = tracker + 16; //END.
-                end
-                counterNext = counter + 1;
+                {printableNext, occuredAtCrossNext, tradePriceNext[31:24]} = {printable, occuredAtCross, tradePrice[31:24]} + (dataIn << (24-1-tracker));
+                tradePriceValidNext = 1;
+                occuredAtCrossValidNext = 1;
+                printableValidNext = 1;
+                counterNext = 0; //GO TO INITIAL STATE.
             end
         endcase
     end

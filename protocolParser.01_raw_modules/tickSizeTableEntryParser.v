@@ -3,6 +3,7 @@ module tickSizeTableEntryParser (
     input [63:0] dataIn,
     input startTickSizeTableEntry,
     input [5:0] trackerIn,
+    output reg signal_end,
     output reg [5:0] trackerOut,
     output reg [31:0] timeStamp,
     output reg [31:0] orderBookID,
@@ -48,6 +49,7 @@ always @* begin
     // transition registers
     trackerNext = tracker;
     counterNext = counter;
+    signal_end = 0;
     // field registers
     timeStampNext = timeStamp;
     orderBookIDNext = orderBookID;
@@ -65,6 +67,7 @@ always @* begin
         // transition registers
         counterNext = 0;
         trackerNext = trackerIn;
+        signal_end = 0;
         // field registers
         timeStampNext = 32'h0;
         orderBookIDNext = 64'h0;
@@ -92,20 +95,26 @@ always @* begin
                 counterNext = counter + 1; 
             end
             1: begin
-                if(orderBookIDValid) begin
-                    tickSizeNext = dataIn;
-                    tickSizeValidNext = 1;
-                    //SIGNAL TO END.
-                    assign trackerOut = 0;
+                if(startTickSizeTableEntry) begin
+                    if(orderBookIDValid) begin
+                        tickSizeNext = dataIn;
+                        tickSizeValidNext = 1;
+                        //SIGNAL TO END.
+                        trackerOut = 0;
+                        signal_end = 1;
+                    end
+                    else begin
+                        {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
+                        timeStampValidNext = 1;
+                        orderBookIDValidNext = 1;
+                        tickSizeNext = dataIn >> tracker;
+                        trackerNext = tracker + 64;
+                    end
+                    counterNext = counter + 1;
                 end
                 else begin
-                    {orderBookIDNext, timeStampNext} = {orderBookID, timeStamp} + (dataIn << (64-1-tracker));
-                    timeStampValidNext = 1;
-                    orderBookIDValidNext = 1;
-                    tickSizeNext = dataIn >> tracker;
-                    trackerNext = tracker + 64;
+                    counterNext = 0;
                 end
-                counterNext = counter + 1;
             end
             2: begin
                 if (tickSizeValid) begin
@@ -121,7 +130,8 @@ always @* begin
                     trackerNext = tracker + 64;
                     counterNext = counter + 1;
                     //SIGNAL TO END.
-                    assign trackerOut = tracker + 64;
+                    trackerOut = tracker + 64;
+                    signal_end = 1;
                 end
             end
             3: begin

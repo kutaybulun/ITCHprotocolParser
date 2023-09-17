@@ -1,59 +1,149 @@
-module itchMessageTypeDecoder ( //IMPORTANT 
+`define R 8'b01010010
+`define L 8'b01001100
+`define O 8'b01001111
+`define A 8'b01000001
+`define F 8'b01000110
+`define E 8'b01000101
+`define C 8'b01000011
+`define D 8'b01000100
+module itchMessageTypeDecoder ( 
     input clk, rst,
+    input start,
     input [63:0] dataIn,
     input [1:0] counter,
+    input [5:0] trackerIn,
+    output wire [5:0] trackerOut,
     output reg startAddOrderNoMPID,
-    output reg startAddOrderWithMPID,
+    output reg startAddOrderMPID,
     output reg startOrderExecuted,
     output reg startOrderExecutedWithPrice,
     output reg startOrderDelete,
-    output reg [15:0] messageLength;
+    output reg startOrderBookDirectory,
+    output reg startOrderBookState,
+    output reg startTickSizeTableEntry,
+    output reg [15:0] messageLength,
+    output reg [7:0] messageType
 );
-reg [15:0] messageLenghtNext;
-reg [7:0] messageType, messageTypeNext;
+// field registers
+reg [15:0] messageLengthNext;
+reg [7:0] messageTypeNext;
+// transition registers
+reg [5:0] tracker, trackerNext;
+reg state, stateNext;
+// valid registers
 reg startAddOrderNoMPIDNext;
-reg startAddOrderWithMPIDNext;
+reg startAddOrderMPIDNext;
 reg startOrderExecutedNext;
 reg startOrderExecutedWithPriceNext;
 reg startOrderDeleteNext;
+reg startOrderBookDirectoryNext;
+reg startOrderBookStateNext;
+reg startTickSizeTableEntryNext;
 
 always @(posedge clk) begin
+    // valid registers
+    startAddOrderMPID <= startAddOrderMPIDNext;
     startAddOrderNoMPID <= startAddOrderNoMPIDNext;
-    startAddOrderWithMPID <= startAddOrderWithMPIDNext;
     startOrderExecuted <= startOrderExecutedNext;
     startOrderExecutedWithPrice <= startOrderExecutedWithPriceNext;
     startOrderDelete <= startOrderDeleteNext;
+    startOrderBookDirectory <= startOrderBookDirectoryNext;
+    startOrderBookState <= startOrderBookStateNext;
+    startTickSizeTableEntry <= startTickSizeTableEntryNext;
+    // field registers
     messageType <= messageTypeNext;
-    messageLength <= messageLenghtNext;
+    messageLength <= messageLengthNext;
+    // transition registers
+    tracker <= trackerNext;
+    state <= stateNext;
 end
 
 always @* begin
+    // valid registers
     startAddOrderNoMPIDNext = 0;
-    startAddOrderWithMPIDNext = 0;
+    startAddOrderMPIDNext = 0;
     startOrderExecutedNext = 0;
     startOrderExecutedWithPriceNext = 0;
     startOrderDeleteNext = 0;
-    messageTypeNext = 8'h0;
-    messageLenghtNext = messageLength;
+    startOrderBookDirectoryNext = 0;
+    startOrderBookStateNext = 0;
+    startTickSizeTableEntryNext = 0;
+    // transition registers
+    stateNext = state;
+    trackerNext = tracker;
+    // field registers
+    messageLengthNext = messageLength;
+    messageTypeNext = messageType;
     if (rst) begin
-        messageTypeNext = 8'h0;
-    end else begin
-        if (counter == 8) begin
-            // Extract the first 16 bits as message length
-            messageLenghtNext = dataIn[15:0];
-
-            // Extract the message type (1 byte) following message length
+        // transition registers
+        trackerNext = trackerIn;
+        stateNext = 0;
+        // field registers
+        messageLengthNext = 0;
+        messageTypeNext = 0;
+        // valid registers
+        startAddOrderNoMPIDNext = 0;
+        startAddOrderMPIDNext = 0;
+        startOrderExecutedNext = 0;
+        startOrderExecutedWithPriceNext = 0;
+        startOrderDeleteNext = 0;
+        startOrderBookDirectoryNext = 0;
+        startOrderBookStateNext = 0;
+        startTickSizeTableEntryNext = 0;
+    end else begin //message type is always reg out
+        if (counter == 8) begin //wire out
+            messageLengthNext = dataIn[15:0];
             messageTypeNext = dataIn[23:16];
-
-            // Determine the appropriate submodule to start based on the message type
+            trackerOut = 24;
             case (messageTypeNext)
-                8'h10: startAddOrderNoMPIDNext = 1; // A: addOrderNoMPID
-                8'h15: startAddOrderWithMPIDNext = 1; // F: addOrderWithMPID
-                8'h14: startOrderExecutedNext = 1; // E: orderExecuted
-                8'h12: startOrderExecutedWithPriceNext = 1; // C: orderExecutedWithPrice
-                8'h13: startOrderDeleteNext = 1; // D: orderDelete
-                default: 
+                R: startOrderBookDirectoryNext = 1;
+                L : startTickSizeTableEntryNext = 1;
+                O : startOrderBookDirectoryNext = 1;
+                A : startAddOrderNoMPIDNext = 1;
+                F : startAddOrderWithMPIDNext = 1;
+                E: startOrderExecutedNext = 1;
+                C: startOrderExecutedWithPriceNext = 1;
+                D: startOrderDeleteNext = 1;
             endcase
+        end
+        if (start) begin
+            if(64 - trackerIn >= 24) begin //wire out
+                {messageTypeNext, messageLengthNext} = dataIn >> trackerIn;
+                trackerOut = trackerIn + 24;
+            end
+            else begin //reg out
+                if(state == 0) begin
+                    {messageTypeNext, messageLengthNext} = dataIn >> trackerIn;
+                    stateNext = 1;
+                    trackerNext = trackerIn + 24;
+                    //trackerOut = trackerIn + 24;
+                    case (messageTypeNext)
+                        R: startOrderBookDirectoryNext = 1;
+                        L : startTickSizeTableEntryNext = 1;
+                        O : startOrderBookDirectoryNext = 1;
+                        A : startAddOrderNoMPIDNext = 1;
+                        F : startAddOrderWithMPIDNext = 1;
+                        E: startOrderExecutedNext = 1;
+                        C: startOrderExecutedWithPriceNext = 1;
+                        D: startOrderDeleteNext = 1;
+                    endcase
+                end
+                else if (state == 1) begin
+                    {messageTypeNext, messageLengthNext} = {messageType, messageLength} + (dataIn << (24-1-tracker));
+                    stateNext = 0;
+                    trackerOut = tracker;
+                    case (messageTypeNext)
+                        R: startOrderBookDirectoryNext = 1;
+                        L : startTickSizeTableEntryNext = 1;
+                        O : startOrderBookDirectoryNext = 1;
+                        A : startAddOrderNoMPIDNext = 1;
+                        F : startAddOrderWithMPIDNext = 1;
+                        E: startOrderExecutedNext = 1;
+                        C: startOrderExecutedWithPriceNext = 1;
+                        D: startOrderDeleteNext = 1;
+                    endcase
+                end
+            end
         end
     end
 end
